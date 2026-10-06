@@ -5,7 +5,7 @@
       "identifier": "shooting_star_demo:fx_sky_tile",
       "basic_render_parameters": {
         "material": "particles_alpha",
-        "texture": "textures/particle/sky_atlas"
+        "texture": "textures/particle/sky_sphere_atlas"
       }
     },
     "components": {
@@ -27,8 +27,8 @@
         ],
         "facing_camera_mode": "lookat_xyz",
         "uv": {
-          "texture_width": 1024,
-          "texture_height": 1024,
+          "texture_width": 1536,
+          "texture_height": 1536,
           "uv": [
             "variable.u",
             "variable.v"

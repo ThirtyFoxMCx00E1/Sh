@@ -68,8 +68,6 @@ const SKILLS = {
 const SKILL_PROP = "shooting_star:selected_skill";
 const CUTSCENE_PROP = "shooting_star:cutscenes_enabled";
 
-const P_LASER = "shooting_star_demo:laser_beacon_beam";
-const P_RAIL = "shooting_star_demo:railgun_beacon_beam";
 const P_STAR = "shooting_star_demo:constellation_star";
 const P_IMPACT = "shooting_star_demo:stellar_impact";
 const B_CORE = "shooting_star_demo:star_core";
@@ -215,6 +213,7 @@ const FXP = {
   ringStatic: "shooting_star_demo:fx_ring_static", streak: "shooting_star_demo:fx_streak", ember: "shooting_star_demo:fx_ember",
   sprite: "shooting_star_demo:fx_sprite", spriteAdd: "shooting_star_demo:fx_sprite_add",
   ringView: "shooting_star_demo:fx_ring_view", starDisc: "shooting_star_demo:fx_star_disc", ringsys: "shooting_star_demo:fx_ringsys", skyTile: "shooting_star_demo:fx_sky_tile", cloud: "shooting_star_demo:fx_cloud", label: "shooting_star_demo:fx_label", orbit: "shooting_star_demo:fx_orbit",
+  corona: "shooting_star_demo:fx_corona", beam: "shooting_star_demo:fx_beam",
 };
 const COL = { laser: [1, 0.045, 0.07], laserHot: [1, 0.55, 0.6], pale: [1, 0.92, 0.72], violet: [0.62, 0.48, 1], violetHot: [0.86, 0.8, 1],
               white: [1, 1, 1], cyan: [0.3, 0.85, 1], gold: [1, 0.8, 0.35] };            // star.glsl / stars_space.fsh palettes
@@ -244,11 +243,26 @@ const fxFlare = (d, l, size, life, color, a = 1, hold = false) => fx(d, FXP.flar
 const fxRingView = (d, l, radius, life, color, a = 1, hold = false) => fx(d, FXP.ringView, l, { size: radius, life, color, a, hold });
 const fxOrbit = (d, l, radius, life, a = 1) => fx(d, FXP.orbit, l, { size: radius, life, color: COL.white, a, hold: true });
 const LABEL_KEYS = { SOL: 7 };
-/** FxManager$Label / StarPath$Tag / SevenStarsPath$Tag — HUD tags rebuilt as camera-facing text sprites (bracket + name + 'α UMa · 123 LY') */
-function fxLabel(d, l, idx, halfH, life, a = 1) { fx(d, FXP.label, l, { size: halfH, life, color: COL.white, a, atlas: [(idx % 2) * 192, Math.floor(idx / 2) * 48, 192, 48], hold: true }); }
+/** FxManager$Label / StarPath$Tag / SevenStarsPath$Tag — HUD tags rebuilt as camera-facing text sprites (bracket + name + 'α UMa · 123 LY').
+ *  PC behaviour (matched here): the NAME label shows ONE star at a time; once the next star takes over, the previous name is gone
+ *  but its target bracket [  ] stays.  named=true -> cell idx (DUBHE..ALKAID/SOL), named=false -> generic NODE target cell. */
+function fxLabel(d, l, idx, halfH, life, a = 1, named = true) {
+  const cell = named ? idx : 8 + (idx % 7);            // 8..14 = bracket-only target markers ("NODE n")
+  fx(d, FXP.label, l, { size: halfH, life, color: COL.white, a, atlas: [(cell % 2) * 192, Math.floor(cell / 2) * 48, 192, 48], hold: true });
+}
+/** which star currently OWNS the name label (all the others show only their target bracket) */
+function namedStar(t) {
+  if (t >= S7.LOCKS && t < 52) return clamp(Math.floor((t - S7.LOCKS) / S7.LOCK_STEP), 0, 6);
+  if (t >= 150 && t < 192) return clamp(Math.floor((t - 150) / 6), 0, 6);
+  if (t >= 200 && t < 228) return clamp(Math.floor((t - 200) / 4), 0, 6);
+  return -1;
+}
 const fxRing = (d, l, radius, life, color, a = 1) => fx(d, FXP.ring, l, { size: radius, life, color, a });
 const fxRingStatic = (d, l, radius, life, color, a = 1) => fx(d, FXP.ringStatic, l, { size: radius, life, color, a });
 const fxStreak = (d, l, w, h, life, color, a = 1) => fx(d, FXP.streak, l, { w, h, life, color, a });
+/** beam corona: a tall soft TRANSPARENT white glow pillar (star_beam.fsh corona) — never a textured sprite strip */
+const fxCorona = (d, l, w, h, life, color, a = 1, hold = false) => fx(d, FXP.corona, l, { w, h, life, color, a, hold });
+const fxBeam = (d, l, w, h, life, color, a = 1, hold = false) => fx(d, FXP.beam, l, { w, h, life, color, a, hold });
 function fxEmbers(d, c, n, spread, speed, rise, size, life, color, a = 0.9) {
   n = Math.max(1, Math.round(n * CFG.fxScale));
   for (let i = 0; i < n; i++) fx(d, FXP.ember, V(c.x + gauss(spread), c.y + Math.abs(gauss(spread * 0.3)), c.z + gauss(spread)),
@@ -382,9 +396,11 @@ function cinematicHud(player, cut) {
 /* ═════════════════════════════ SKY / SPACE ENGINE ═════════════════════════════
  * LevelRendererMixin + stars_space.fsh + StarPath/SevenStarsPath, rebuilt for Bedrock.
  *
- *  - SKY DOME  : 48 opaque star-field tiles (sky_atlas .. sky_atlas7) on a Fibonacci sphere. Every point of the sky is covered by
- *                at least 2 tiles, so the vanilla night sky, stars and moon_phases can never show through. Each tile has its own
- *                depth so overlapping tiles never z-fight. The dome fades out again at the end (the moon fades back in).
+ *  - SKY DOME  : ONE connected sphere on ONE depth layer: 30 camera-facing tiles on a Fibonacci sphere, tile angular half-size
+ *                40° (>> the 23° covering radius) so every point of the sky is covered by several overlapping tiles — the vanilla
+ *                night sky, stars and moon_phases can never show through the gaps. All tiles sample ONE 3x3 combined atlas
+ *                (sky_sphere_atlas, "like cloud_atlas but 3 wide, not 4"). Distance 48 keeps every tile spawn-safe under the
+ *                build limit. The dome is removed when the fired stars reach Earth (fade 256-280) and fades out again at the end.
  *  - VIRTUAL CAMERA : SevenStarsPath.shot() is ported 1:1. During the voyage the Bedrock camera stays on ONE anchor point and only
  *                turns; everything astronomical (Earth, Moon, Sun, the 7 stars, speed lines, the array of each star) is placed from
  *                the virtual camera's real light-year geometry, so parallax and positions are the Java mod's.
@@ -512,19 +528,23 @@ function s4Geom(vs) {
   return { u, s, e: vMul(vSub(s, SPATH.EARTH_S), 1 / ER_AU) };
 }
 
-/* ── SKY DOME ── */
-const SKY = { N: 48, D: [66, 54, 44], HALF: 0.52 };         // tile half-extent = HALF * distance (tan 27.5°) > covering radius 22.5° of a 48-point sphere
+/* ── SKY DOME ──
+ * ONE connected sphere on ONE depth layer ("one, not four"): 30 camera-facing tiles on a Fibonacci sphere with the tile
+ * half-extent 1.6× the covering radius, so every point of the sky is covered by several overlapping tiles — the vanilla
+ * night sky, stars and moon_phases can NEVER show through the gaps (this is what made the old dome look like separate boxes).
+ * All tiles come from ONE combined atlas (sky_sphere_atlas = 3×3 of 512px starfield tiles, like cloud_atlas but 3 wide, not 4).
+ * Distance 48 keeps every tile centre inside the build height even with the camera at the top of the scenes (spawn-safe). */
+const SKY = { N: 30, D: 48, HALF: 0.85 };                   // HALF = tan(40°): tile angular half-size 40° >> covering radius ~23° of 30 points
 const SKY_TILE = (() => {
   const out = [], g = Math.PI * (1 + Math.sqrt(5));
   for (let i = 0; i < SKY.N; i++) {
     const y = 1 - (2 * (i + 0.5)) / SKY.N, r = Math.sqrt(1 - y * y), th = g * (i + 0.5), d = V(Math.cos(th) * r, y, Math.sin(th) * r);
-    const band = Math.abs(vDot(d, SPATH.GALAXY_N)) < 0.33;                           // the dense atlases (4, 7) form the Milky Way band
-    const pool = band ? [4, 7, 4, 7] : [1, 2, 3, 5, 6];
-    out.push({ d, a: pool[i % pool.length], u: (i * 211) % 385, v: (i * 137 + 97) % 385 });
+    const t = i % 9;                                                                    // 3×3 atlas cell for this tile
+    out.push({ d, u: (t % 3) * 512, v: Math.floor(t / 3) * 512 });
   }
   return out;
 })();
-const SKY_FX = ["", "", "2", "3", "4", "5", "6", "7"].slice(1).map((s) => `shooting_star_demo:fx_sky_tile${s}`);
+const SKY_FX = "shooting_star_demo:fx_sky_tile";
 /** Opaque star-field dome around `anchor`. mapDir maps a sky direction into Bedrock world space (virtual camera); null = world-fixed.
  *  horizonOnly keeps the ground visible (tiles whose centre is clearly below the horizon are skipped). Returns tiles spawned. */
 function skyDome(dim, anchor, mapDir, fwd, fovDeg, alpha, horizonOnly, lowAlpha = alpha) {
@@ -537,13 +557,10 @@ function skyDome(dim, anchor, mapDir, fwd, fovDeg, alpha, horizonOnly, lowAlpha 
     if (vDot(d, fwd) < lim) continue;
     const low = d.y < -0.12;
     if (low && (horizonOnly || lowAlpha <= 0.02)) continue;
-    for (const D0 of SKY.D) {
-      const Dk = D0 + i * 0.012, pos = vAdd(anchor, vMul(d, Dk));                    // unique depth per tile -> stable order, no flicker in overlaps
-      if (!inBounds(dim, pos.y) || !chunkReady(dim, pos.x, pos.z)) continue;
-      fx(dim, SKY_FX[T.a - 1], pos, { size: Dk * SKY.HALF * (CFG.skyScale ?? 1), life: LF, color: COL.white, a: low ? Math.min(1, lowAlpha) : a, atlas: [T.u, T.v, 640, 640], hold: true });
-      n++;
-      break;
-    }
+    const Dk = SKY.D + i * 0.012, pos = vAdd(anchor, vMul(d, Dk));                      // unique depth per tile -> stable order, no flicker in overlaps
+    if (!inBounds(dim, pos.y) || !chunkReady(dim, pos.x, pos.z)) continue;
+    fx(dim, SKY_FX, pos, { size: Dk * SKY.HALF * (CFG.skyScale ?? 1), life: LF, color: COL.white, a: low ? Math.min(1, lowAlpha) : a, atlas: [T.u, T.v, 512, 512], hold: true });
+    n++;
   }
   return n;
 }
@@ -588,7 +605,9 @@ class ScreenFx {
   constructor() { this.shake = 0; this.flashA = 0; this.flashC = [1, 1, 1]; this.zoomBlur = 0; this.bloom = 0; this.aberration = 0; }
   addFlash(rgb, a) { if (a > this.flashA) { this.flashA = a; this.flashC = [((rgb >> 16) & 255) / 255, ((rgb >> 8) & 255) / 255, (rgb & 255) / 255]; } }
 }
-/** SevenStarsFx.filmScreen — the exact triggers of the Java mod for the voyage (jumps, array shakes, fire flashes, ride blur, return flash) */
+/** SevenStarsFx.filmScreen — the exact triggers of the Java mod for the voyage (jumps, fire flashes, ride blur, return flash).
+ *  The ARRAYS phase is deliberately free of shake/flash: the camera must sit perfectly steady on each star (the PC cutscene
+ *  teleports the view per star — anything shake-like here reads as camera wobble and is wrong). */
 function filmScreen(sx, ct) {
   const cover = SevenStarsCover(ct);
   if (cover > 0.001) sx.bloom = Math.max(sx.bloom, 0.6);
@@ -598,22 +617,29 @@ function filmScreen(sx, ct) {
     sx.addFlash(14208255, k * 0.25);
   }
   for (let i = 0; i < 7; i++) {
-    const at = 150 + i * 6, k = win4(ct, at, at + 0.5, at + 1, at + 4);
-    sx.shake = Math.max(sx.shake, k * 0.35);
-    sx.aberration = Math.max(sx.aberration, k * 0.6);
-    const f = 200 + i * 4, kf = win4(ct, f, f + 0.3, f + 0.6, f + 3);
+    const f = 200 + i * 4, kf = win4(ct, f, f + 0.25, f + 0.5, f + 2);        // one SHORT white splash per fire — flash in a second, never a long wash
     sx.addFlash(15788799, kf * (0.6 + 0.2 * i));
     sx.shake = Math.max(sx.shake, kf * (0.4 + 0.1 * i));
     sx.zoomBlur = Math.max(sx.zoomBlur, kf * 0.5);
   }
   sx.zoomBlur = Math.max(sx.zoomBlur, win4(ct, 228, 230, 254, 256) * 0.4);
-  sx.addFlash(0xFFFFFF, win4(ct, 272, 272.2, 272.6, 275) * 1.2);
+  sx.addFlash(0xFFFFFF, win4(ct, 272, 272.15, 272.35, 274) * 1.2);
 }
 const SevenStarsCover = (ct) => clamp((ct - 58) / 12, 0, 1);                           // SevenStarsPath.cover
-/** apply a ScreenFx to one player's lens; W is the current view (screen -> world helper) */
+/** apply a ScreenFx to one player's lens; W is the current view (screen -> world helper).
+ *  fade + shake are THROTTLED (once per event window): stacking a camera.fade every tick is what made the white splash
+ *  sit on the screen for seconds instead of flashing for a second like the real firing. */
+let LAST_SCREEN = { fade: -999, shake: -999 };
 function applyScreenFx(player, sx, W) {
-  if (sx.shake > 0.03) tryDo("shake", () => player.runCommand(`camerashake add @s ${Math.min(2.5, sx.shake * 0.9).toFixed(2)} 0.12 rotational`));
-  if (sx.flashA > 0.9) tryDo("camera.fade", () => player.camera.fade({ fadeColor: { red: sx.flashC[0], green: sx.flashC[1], blue: sx.flashC[2] }, fadeTime: { fadeInTime: 0.02, holdTime: 0.02, fadeOutTime: 0.18 } }));
+  const now = system.currentTick;
+  if (sx.shake > 0.03 && now - LAST_SCREEN.shake > 8) {
+    LAST_SCREEN.shake = now;
+    tryDo("shake", () => player.runCommand(`camerashake add @s ${Math.min(2.5, sx.shake * 0.9).toFixed(2)} 0.12 rotational`));
+  }
+  if (sx.flashA > 0.9 && now - LAST_SCREEN.fade > 16) {
+    LAST_SCREEN.fade = now;
+    tryDo("camera.fade", () => player.camera.fade({ fadeColor: { red: sx.flashC[0], green: sx.flashC[1], blue: sx.flashC[2] }, fadeTime: { fadeInTime: 0.02, holdTime: 0.02, fadeOutTime: 0.15 } }));
+  }
   if (W && sx.flashA > 0.04) fxGlow(player.dimension, W.scr(0, 0, 3), 3 * W.tanB * ASPECT * 1.5, LF, sx.flashC, clamp(sx.flashA * 0.8, 0, 0.9), true);
   if (W && sx.bloom > 0.05) fxGlow(player.dimension, W.scr(0, 0, 4), 4 * W.tanB * ASPECT * 1.4, LF, [0.8, 0.84, 1], clamp(sx.bloom * 0.06, 0, 0.14), true);
 }
@@ -654,11 +680,13 @@ function cinematicSky(player, cut, pose) {
 const lockT = (i) => S7.LOCKS + S7.LOCK_STEP * i, fallT = (i) => landTick(i) - 26;
 const rightOfDir = (f) => { const r = V(-f.z, 0, f.x); return vLenSq(r) < 1e-6 ? V(1, 0, 0) : vNorm(r); };
 /** The figure in the REAL sky (lens stars + links + tags at the true bearings of the 7 stars), `D` blocks around `cam`.
- *  Used for players who watch from the ground and for the ground shots of the cutscene. */
+ *  Used for players who watch from the ground and for the ground shots of the cutscene.
+ *  From the FINALE on the whole figure RE-FORMS (the firing-cooldown view): stars + links + target brackets, names gone. */
 function sevenSkyFigure(sp, t, cam, D, thick) {
-  const dim = sp.dim, k = D / 64, Q = [];
+  const dim = sp.dim, k = D / 64, Q = [], reformed = t >= S7.FINALE - 6;
   for (let i = 0; i < 7; i++) Q.push(vAdd(cam, vMul(dipperSkyDir(i, sp.turn), D)));
-  const shown = (i) => t >= lockT(i) && t < fallT(i);
+  const shown = (i) => reformed || (t >= lockT(i) && t < fallT(i));
+  const named = namedStar(t);
   for (let i = 0; i < 7; i++) {
     if (!shown(i)) continue;
     const boost = t - lockT(i) < 8 ? 1 + (8 - (t - lockT(i))) / 5 : 1;
@@ -666,7 +694,7 @@ function sevenSkyFigure(sp, t, cam, D, thick) {
     fxFlare(dim, Q[i], size, LF, COL.violetHot, 0.8, true);
     fxGlow(dim, Q[i], size * 1.4, LF, thick ? COL.white : COL.violet, 0.3, true);
   }
-  if (t >= lockT(6) + 6) {
+  if (reformed || t >= lockT(6) + 6) {
     for (const [a, b] of DIPPER.LINKS) {
       if (!shown(a) || !shown(b)) continue;
       const len = vLen(vSub(Q[b], Q[a])), n = Math.max(2, Math.ceil(len / ((thick ? 1.0 : 1.5) * k)));
@@ -674,21 +702,26 @@ function sevenSkyFigure(sp, t, cam, D, thick) {
     }
   }
   for (let i = 0; i < 7; i++) {                                             // tags only until that star has fired
-    if (!shown(i) || t >= fireT(i)) continue;
+    if (!shown(i) || (!reformed && t >= fireT(i))) continue;
     const halfL = D * 0.022, f = vNorm(vSub(Q[i], cam));
-    fxLabel(dim, vAdd(Q[i], vMul(rightOfDir(f), halfL * 4 * 0.79)), i, halfL, LF, 0.9);
+    fxLabel(dim, vAdd(Q[i], vMul(rightOfDir(f), halfL * 4 * 0.79)), i, halfL, LF, 0.9, !reformed && i === named);
   }
 }
-/** radial speed lines from the heading point (the camera always looks along the travel direction) — chains of soft dots, re-rolled each tick */
+/** radial speed lines from the heading point — thin WHITE line bars, each an OVERLAPPING chain of soft dots (step < dot size),
+ *  so a line reads as one continuous bar with no gaps and no "beans". Re-rolled every tick (the shimmer of the original shader). */
 function warpLines(dim, W, amount) {
-  const n = Math.round(22 * clamp(amount, 0, 1.2) * CFG.fxScale);
+  const n = Math.round(34 * clamp(amount, 0, 1.3) * CFG.fxScale);
   for (let q = 0; q < n; q++) {
-    const ang = Math.random() * Math.PI * 2, ca = Math.cos(ang), sa = Math.sin(ang), r0 = 0.16 + Math.random() * 0.95, step = 0.05 + 0.05 * amount;
-    const col = Math.random() < 0.6 ? COL.white : COL.violetHot;
-    for (let j = 0; j < 5; j++) {
-      const r = r0 + j * step, x = ca * r, y = sa * r;
-      if (Math.abs(x) > ASPECT || Math.abs(y) > 1.25) break;
-      fxGlow(dim, W.scr(x, y, 14), (0.006 + 0.004 * j * (1 + amount)) * W.tanB * 14, LF, col, clamp((0.25 + 0.15 * j) * amount, 0, 0.85), true);
+    const ang = Math.random() * Math.PI * 2, ca = Math.cos(ang), sa = Math.sin(ang);
+    const r0 = 0.1 + Math.random() * 0.8, len = 0.4 + Math.random() * 0.95;
+    const thick = 0.0032 + 0.0034 * Math.random() * (0.65 + amount);          // thin bars
+    const steps = Math.max(8, Math.ceil(len / (thick * 0.5)));                 // step = half a dot -> fully connected chain
+    const D = 14, sz = thick * W.tanB * D;
+    for (let j = 0; j <= steps; j++) {
+      const r = r0 + (len * j) / steps, x = ca * r, y = sa * r;
+      if (Math.abs(x) > ASPECT * 1.2 || Math.abs(y) > 1.4) break;
+      const k = Math.min(1, j / 2) * Math.min(1, (steps - j) / 2 + 0.35);
+      fxGlow(dim, W.scr(x, y, D), sz * (0.8 + 0.3 * k), LF, COL.white, clamp((0.5 + 0.4 * k) * amount, 0, 0.95), true);
     }
   }
 }
@@ -732,42 +765,46 @@ function sevenVoyage(sp, p, st) {
     }
   }
   // ── 3. the seven stars at their true places (parallax from the light-year position of the camera) ──
-  const lockA = win4(ct, 66, 72, 88, 96), DF = 36, tags = (ct >= 96 && ct < 150) || (ct >= 192 && ct < 230);
+  const lockA = win4(ct, 66, 72, 88, 96), DF = 36, tags = ct >= 96 && ct < 230;
   if ((ct < 96 && lockA > 0.02) || ct >= 96) {
     const Q = [], seenI = [];
     for (let i = 0; i < 7; i++) {
       const pos = ct >= 200 ? s4ShotAt(ct, i, turn) : s4Star(i, turn), rel = vSub(pos, G.u), d = vLen(rel), dir = vMul(rel, 1 / d);
       seenI.push(W.seen(dir, 1.3)); Q.push(W.at(dir, DF));
-      if (!seenI[i] || (ct >= 150 && ct < 192 && i === clamp(Math.floor((ct - 150) / 6), 0, 6))) continue;   // the centred array star is drawn as a disc below
+      const centred = ct >= 150 && ct < 192 && i === clamp(Math.floor((ct - 150) / 6), 0, 6);
+      if (seenI[i] && tags) fxLabel(dim, vAdd(Q[i], vMul(Bb.r, DF * 0.022 * 4 * 0.79)), i, DF * 0.022, LF, 0.9, i === namedStar(ct));
+      if (!seenI[i] || centred) continue;   // the centred array star is drawn as a disc below (its tag stays with it)
       const a = ct < 96 ? lockA : 1, boost = ct < 96 ? 1 + (ct < 72 ? (72 - ct) / 8 : 0) : 1;
       const g = (0.014 + 0.011 * (3.4 - DIPPER.MAG[i]) + (ct >= 96 ? 0.12 / (1 + d / 5) : 0.012)) * boost, size = W.sz(g, DF);
       fxFlare(dim, Q[i], size, LF, COL.violetHot, 0.8 * a, true);
       fxGlow(dim, Q[i], size * 1.5, LF, COL.violet, 0.3 * a, true);
-      if (tags) fxLabel(dim, vAdd(Q[i], vMul(Bb.r, DF * 0.022 * 4 * 0.79)), i, DF * 0.022, LF, 0.9);
     }
-    if (ct < 96 && lockA > 0.02) {                                           // the figure's links, only while it is locked (SevenStarsPath.lock window)
+    const linkA = ct < 96 ? lockA : (ct >= 192 && ct < 230 ? 1 : 0);
+    if (linkA > 0.02) {                                     // the figure's links: while it is locked (SevenStarsPath.lock) and again as it re-forms before the firing
       for (const [a, b] of DIPPER.LINKS) {
         if (!seenI[a] || !seenI[b]) continue;
         const len = vLen(vSub(Q[b], Q[a])), n = Math.max(2, Math.ceil(len / 1.2));
-        for (let q = 1; q < n; q++) fxGlow(dim, vLerp(Q[a], Q[b], q / n), 0.2, LF, COL.violet, 0.8 * lockA, true);
+        for (let q = 1; q < n; q++) fxGlow(dim, vLerp(Q[a], Q[b], q / n), 0.2, LF, COL.violet, 0.8 * linkA, true);
       }
     }
-    // ── FIRE: the burst ring leaves EACH star where it fires, then the comet streaks home ──
+    // ── FIRE: the burst ring stays AT the star where it fired (never trails along with it), then the comet needles streak home together ──
     if (ct >= 200 && ct < 262) for (let i = 0; i < 7; i++) {
-      const u = (ct - fireT(i)) / 16;
-      if (u >= 0 && u <= 1 && seenI[i]) {
-        const e = easeOutExpo(u);
-        fxRingView(dim, Q[i], W.sz(0.023 + 0.19 * e, DF), LF, COL.white, 0.85 * (1 - u), true);
-        fxRingView(dim, Q[i], W.sz(0.016 + 0.11 * e, DF), LF, COL.violetHot, 0.8 * (1 - u), true);
-        fxFlare(dim, Q[i], W.sz(0.05 * (1 - u) + 0.025, DF), LF, COL.white, 0.9 * (1 - u * 0.6), true);
+      const u = (ct - fireT(i)) / 7;
+      if (u >= 0 && u <= 1 && ct < 226 && seenI[i]) {
+        const s0 = s4Star(i, turn), rel0 = vSub(s0, G.u), d0 = vLen(rel0), dir0 = vMul(rel0, 1 / d0);   // frozen launch point
+        if (W.seen(dir0, 1.3)) {
+          const e = easeOutExpo(u);
+          fxRingView(dim, W.at(dir0, DF), W.sz(0.023 + 0.12 * e, DF), LF, COL.white, 0.85 * (1 - u), true);
+          fxFlare(dim, W.at(dir0, DF), W.sz(0.05 * (1 - u) + 0.02, DF), LF, COL.white, 0.9 * (1 - u * 0.6), true);
+        }
       }
       if (s4Fired(ct, i) >= 0) {
-        for (let j = 0; j <= 9; j++) {
-          const rel = vSub(s4ShotAt(ct - j * 0.9, i, turn), G.u), dd = vLen(rel), dir = vMul(rel, 1 / dd);
-          if (!W.seen(dir, 1.3)) continue;
-          const f = 1 - j / 10;
-          if (j === 0) { fxFlare(dim, W.at(dir, DF), W.sz(0.04, DF), LF, COL.white, 0.9, true); fxGlow(dim, W.at(dir, DF), W.sz(0.055, DF), LF, COL.violetHot, 0.6, true); }
-          else fxGlow(dim, W.at(dir, DF), W.sz(0.026 * f, DF), LF, COL.white, 0.7 * f, true);
+        for (let j = 18; j >= 0; j--) {                                     // one long thin continuous needle per fired star
+          const rel = vSub(s4ShotAt(ct - j * 0.5, i, turn), G.u), dd = vLen(rel), dir = vMul(rel, 1 / dd);
+          if (!W.seen(dir, 1.35)) continue;
+          const f = 1 - j / 19;
+          if (j === 0) { fxFlare(dim, W.at(dir, DF), W.sz(0.045, DF), LF, COL.white, 0.95, true); fxGlow(dim, W.at(dir, DF), W.sz(0.06, DF), LF, COL.violetHot, 0.55, true); }
+          else fxGlow(dim, W.at(dir, DF), W.sz(0.011 + 0.012 * f, DF), LF, COL.white, 0.55 + 0.35 * f, true);
         }
       }
     }
@@ -801,10 +838,25 @@ function sevenSceneTick(sp, t) {
         const ct = st.cut.age;
         if (ct >= 58 && ct < 256) { sevenVoyage(sp, p, st); return; }
         const cam = st.pos, fwd = vNorm(vSub(st.look, st.pos)), fov = st.fovCur ?? 70;
-        const domeA = ramp(ct, 0, 8) * (1 - ramp(ct, 262, 296));
+        const domeA = ramp(ct, 0, 8) * (1 - ramp(ct, 256, 280));                       // sky_atlas gone when the fired stars arrive — we are back in the world (Earth)
         st.domeA = domeA;
         skyDome(sp.dim, cam, null, fwd, fov, domeA, true);
         if (ct < 52 || ct >= 256) sevenSkyFigure(sp, ct, cam, 36, ct >= 256);
+        if (ct >= 280) {                                    // the burned figure lights the night (stars_world.fsh violet tint):
+          for (let i = 0; i < 7; i++) {                     // soft violet glow over every crater + along the burned links
+            const n = sp.nodeVec(i);
+            if (!chunkReady(sp.dim, n.x, n.z)) continue;
+            fxGlow(sp.dim, V(n.x, n.y + 2, n.z), sp.craterR(i) * 1.6, LF, COL.violet, 0.14, true);
+            fxGlow(sp.dim, V(n.x, n.y + 7, n.z), 7, LF, COL.violetHot, 0.22, true);
+          }
+          if (ct >= S7.LINK + 20) for (const [a, b] of DIPPER.LINKS) {
+            const A = sp.nodeVec(a), B = sp.nodeVec(b);
+            for (let q = 1; q < 8; q++) {
+              const p = vLerp(A, B, q / 8);
+              if (chunkReady(sp.dim, p.x, p.z)) fxGlow(sp.dim, V(p.x, p.y + 1.5, p.z), 3.2, LF, COL.violet, 0.3, true);
+            }
+          }
+        }
         if (ct >= 44 && ct < 74) cloudDeck(sp.dim, cam, sp.centre.y + 30, dimMax(sp.dim) - 70);
         if (ct >= 256 && ct < 280) { const sx = new ScreenFx(); filmScreen(sx, ct); applyScreenFx(p, sx, null); }
       });
@@ -842,9 +894,14 @@ system.runTimeout(() => { // a crash during a cast must not leave the world stuc
   tryDo("night-recover", () => { const raw = world.getDynamicProperty(NIGHT_KEY); if (typeof raw === "string" && NIGHT.users === 0) nightRestore(JSON.parse(raw)); });
 }, 80);
 
-function beamColumn(dim, x, z, y0, y1, rail) {
-  const step = rail ? 4 : 6;
-  for (let y = y0; y <= y1; y += step) particle(dim, rail ? P_RAIL : P_LASER, V(x + 0.5, y, z + 0.5));
+/** A beam column drawn as smooth soft vertical bars (fx_beam) — the old beacon-beam billboards were textured sprite strips.
+ *  `color` tints the core; `corona` adds the wide transparent white glow pillar around it (star_beam.fsh corona). */
+function beamColumn(dim, x, z, y0, y1, rail, color, corona) {
+  const step = rail ? 4 : 6, col = color ?? (rail ? COL.laserHot : COL.laser);
+  for (let y = y0; y <= y1; y += step) {
+    fxBeam(dim, V(x + 0.5, y, z + 0.5), rail ? 1.6 : 2.6, 12, 0.16, col, 0.95);
+    if (corona) fxCorona(dim, V(x + 0.5, y, z + 0.5), 10, 22, 0.16, COL.white, 0.16);
+  }
 }
 
 function shakeAll(dim, intensity, seconds, range, mode = "positional") {
@@ -1253,12 +1310,10 @@ function sevenStarsCutscene(S, sp) {
     const p0 = nr(S, vXYZ(centre(), 0, 460, 0)), pos = V(p0.x, Math.min(p0.y, capY), p0.z);
     const vs = sevenShot(raw, sp.turn), b = smooth((raw - 70) / 10);                   // eases the look from the ascent (figure direction) into the voyage
     const fwd = raw < 80 ? vNorm(vLerp(cdir, vs.fwd, b)) : vs.fwd;
-    const z = pose(pos, vAdd(pos, vMul(fwd, 100)), vs.fov + 43 * (1 - b), 0);          // 105 -> calm: the warp punch of the original dissolve
-    // every star's array is a pose with EASE-OUT (CutsceneDirector eases once per star, then holds perfectly still)
-    if (raw >= 150 && raw < 192) z.ease = { key: `tour${Math.floor((raw - 150) / 6)}`, time: 0.28, type: "OutCubic" };
-    else if (raw >= 192 && raw < 198) z.ease = { key: "tour-out", time: 0.45, type: "OutCubic" };
-    else if (raw >= 130 && raw < 136) z.ease = { key: "jump130", time: 0.3, type: "OutCubic" };
-    return z;
+    // Arrays (150-192): the pose is CONSTANT inside each 6-tick star window and JUMPS to the next star — a hard /camera teleport
+    // per star (the Java mod never sweeps the camera from star to star). Same for the jump back to the figure at 192 and the
+    // parallax jump at 130: hard cuts, no easing turns, no camera-shake feel. The camera holds perfectly still on each star.
+    return pose(pos, vAdd(pos, vMul(fwd, 100)), vs.fov + 43 * (1 - b), 0);              // 105 -> calm: the warp punch of the original dissolve
   };
   // P4b = REFORM (256-272): back on the ground, looking up at the re-formed figure from SOL
   const P4b = (S, t) => { const p = S.frame(S.feet(), 1.2, 1.9, -1.6); return pose(p, vAdd(p, vMul(cdir, 100)), 72, 0); };
@@ -1489,13 +1544,13 @@ class ShootingStarSpell extends Spell {
       case 238: sfx("star_gun", { big: true }); break;                             // StarFx: ModSounds.STAR_GUN @238
       case SS.FIRE:
         sfx("star_fire", { big: true });
-        flash(dim, [1, 0.2, 0.2], [0.05, 0.08, 0.5], gp, 300);
+        flash(dim, [1, 0.2, 0.2], [0.03, 0.05, 0.3], gp, 300);
         fxFlare(dim, vXYZ(gp, 0, 90, 0), 26, 1.6, COL.laserHot);                   // muzzle flash high above the target
         break;
       case SS.IMPACT:
         sfx("star_impact", { big: true }); sfx("star_beam", { big: true });
         particle(dim, P_IMPACT, V(gp.x, T.y + 1, gp.z));
-        flash(dim, [1, 0.9, 0.9], [0.02, 0.1, 0.9], gp, 400);                      // composite.fsh Flash
+        flash(dim, [1, 0.9, 0.9], [0.02, 0.05, 0.4], gp, 400);                      // composite.fsh Flash
         shakeAll(dim, 1.6, 6, 300);
         fxFlare(dim, vXYZ(gp, 0, 4, 0), Math.max(24, R * 0.9), 2.4, COL.laserHot);
         fxGlow(dim, vXYZ(gp, 0, 3, 0), R * 1.4, 2.8, COL.laser, 0.75);
@@ -1506,7 +1561,7 @@ class ShootingStarSpell extends Spell {
         break;
       case SS.COLLAPSE:
         sfx("star_collapse", { big: true });
-        flash(dim, [1, 1, 1], [0.02, 0.05, 0.5], gp, 300);
+        flash(dim, [1, 1, 1], [0.02, 0.04, 0.3], gp, 300);
         fxRing(dim, vXYZ(gp, 0, 0.3, 0), R * 1.4, 1.2, COL.white);
         break;
       case SS.GONE:
@@ -1632,7 +1687,7 @@ class SevenStarsSpell extends Spell {
       case 130: sfx("stars_array"); castTitle(this); break;      // URSA = 130: the title card arrives with the figure
       case 200:
         sfx("stars_fire", { big: true });
-        flashFree(dim, COL.violet, [0.05, 0.08, 0.6], this.centre, 400);   // cutscene players get the per-star flashes of filmScreen instead
+        flashFree(dim, COL.violet, [0.03, 0.04, 0.25], this.centre, 400);   // cutscene players get the per-star flashes of filmScreen instead
         break;
       case 228: sfx("stars_return"); break;                      // ModSounds.STARS_RETURN @228
       case S7.FINALE - 6: sfx("stars_finale", { big: true }); break; // FINALE_LEAD = 6
@@ -1657,26 +1712,28 @@ class SevenStarsSpell extends Spell {
       if (t === linkTick(i)) this.burnLink(i);                   // link burn
     }
     if (t === S7.LINK) sfx("stars_link");
-    if (t === S7.LINK) flash(dim, COL.violetHot, [0.04, 0.05, 0.4], this.centre, 400);
+    if (t === S7.LINK) flash(dim, COL.violetHot, [0.03, 0.03, 0.22], this.centre, 400);
     if (t === S7.FINALE + 120) aftermath(dim, this.nodes.map((n, i) => V(n[0] + 0.5, this.ground[i], n[1] + 0.5)), 800, [COL.violet, COL.violetHot, COL.cyan], 12);
   }
-  /** The star is fired from the constellation: a white 4-point lens star with a comet tail along its own sky direction */
+  /** The star is fired from the constellation: a bright head with ONE long thin continuous white needle behind it
+   *  (the PC impact views show a single thin line streaking in — never dotted beans). */
   dropStar(i, u) {
     const { dim } = this, n = this.nodeVec(i), d = dipperSkyDir(i, this.turn), s = 230 * (1 - u * u);
     const head = vAdd(V(n.x, n.y + 1, n.z), vMul(d, s));
     const size = 8 + 5 * u;
     fxFlare(dim, head, size, 0.09, COL.white, 1, true);
     fxGlow(dim, head, size * 1.6, 0.09, COL.violetHot, 0.8, true);
-    for (let k = 1; k <= 14; k++) {
-      const f = 1 - k / 15;
-      fxGlow(dim, vAdd(head, vMul(d, k * (2.6 + 3 * u))), size * 0.55 * f, 0.09, k < 6 ? COL.white : COL.violet, 0.85 * f, true);
+    const run = 46 + 60 * u, steps = 26;                                     // one long thin needle, fully connected
+    for (let k = 1; k <= steps; k++) {
+      const f = 1 - k / (steps + 1);
+      fxGlow(dim, vAdd(head, vMul(d, (k / steps) * run)), 1.4 + 1.6 * f, 0.09, k < 10 ? COL.white : COL.violetHot, 0.85 * f, true);
     }
   }
   land(i) {
     const { dim } = this, n = this.nodeVec(i);
     sfx("stars_land", { big: true });
     particle(dim, P_IMPACT, V(n.x, n.y + 1, n.z));
-    flash(dim, COL.violetHot, [0.02, 0.05, 0.35], n, 120);
+    flash(dim, COL.violetHot, [0.02, 0.03, 0.2], n, 120);
     shakeAll(dim, 0.8, 1, 150);
     impactTitle(this, i);                                          // "IMPACT 1 · DUBHE" / "α URSAE MAJORIS · 123 LY · CRATER Ø282"
     const R = this.craterR(i);
@@ -1745,7 +1802,7 @@ class SevenStarsSpell extends Spell {
         for (let j = Math.floor(lo * steps); j <= Math.floor(Math.min(hi, 1) * steps); j++) {
           const p = vLerp(A, B, j / steps);
           if (!chunkReady(this.dim, p.x, p.z)) continue;
-          particle(this.dim, P_LASER, V(p.x, p.y + 2, p.z));
+          fxBeam(this.dim, V(p.x, p.y + 2, p.z), 1.1, 8, 0.5, COL.violetHot, 0.9);
           fxGlow(this.dim, V(p.x, p.y + 1.5, p.z), 3.2, 0.5, COL.violetHot, 0.9);
           if (j % 3 === 0) fxEmbers(this.dim, V(p.x, p.y + 0.5, p.z), 4, 1.5, 3, 4, 0.8, 1.0, COL.violet);
         }
@@ -1777,18 +1834,34 @@ class SevenStarsSpell extends Spell {
     }
   }
   finale() {
-    flash(this.dim, COL.white, [0.05, 0.12, 1.0], this.centre, 500);
+    flash(this.dim, COL.white, [0.03, 0.05, 0.35], this.centre, 500);
     shakeAll(this.dim, 1.6, 3, 250);
     for (let i = 0; i < 7; i++) {
       const n = this.nodeVec(i);
       system.runTimeout(() => { // FINALE_BURST: each star flashes in turn
         particle(this.dim, P_IMPACT, V(n.x, n.y + 3, n.z));
-        beamColumn(this.dim, this.nodes[i][0], this.nodes[i][1], n.y, Math.min(dimMax(this.dim) - 1, n.y + 200), true);
-        for (let y = n.y + 18; y < n.y + 300; y += 36) fxStreak(this.dim, V(n.x, y, n.z), 2.4, 20, 1.2, COL.violetHot, 0.9);
+        beamColumn(this.dim, this.nodes[i][0], this.nodes[i][1], n.y, Math.min(dimMax(this.dim) - 1, n.y + 200), true, COL.white, true);
         fxFlare(this.dim, V(n.x, n.y + 6, n.z), 22, 1.8, COL.white);
         fxRing(this.dim, V(n.x, n.y + 0.4, n.z), this.craterR(i) * 1.6, 2.2, COL.violetHot);
       }, i * 3);
     }
+    // THE BEAM CORONA (star_beam.fsh corona): tall TRANSPARENT white glow pillars over the craters that fade STRAIGHT off
+    // over ~2.2 s, revealing the re-formed seven-star constellation in the sky — the firing-cooldown view of the original mod.
+    let k = 0;
+    const id = system.runInterval(() => {
+      const fade = 1 - k / 22;
+      if (fade <= 0) { system.clearRun(id); return; }
+      for (let i = 0; i < 7; i++) {
+        const n = this.nodeVec(i);
+        if (!chunkReady(this.dim, n.x, n.z)) continue;
+        for (let y = n.y + 6; y < n.y + 130; y += 26) {
+          fxCorona(this.dim, V(n.x, y, n.z), 15, 32, 0.15, COL.white, 0.28 * fade);
+          fxCorona(this.dim, V(n.x, y, n.z), 5, 32, 0.15, COL.white, 0.38 * fade);
+        }
+        fxCorona(this.dim, V(n.x, n.y + 4, n.z), 28, 18, 0.15, COL.white, 0.20 * fade);
+      }
+      k++;
+    }, 2);
   }
   onEnd() { nightEnd(); }
 }
@@ -1868,12 +1941,15 @@ system.runInterval(() => {
 /* ───────────────────────────── Remote tuner (attachable transforms live in player properties) ───────────────────────────── */
 const RP = "shooting_star_demo:";
 const REMOTE_DEFAULTS = {
-  fp: { px: 0, py: 0, pz: 0, rx: 140, ry: 180, rz: 0, s: 1.0 },  // first person
-  tp: { px: 0, py: 0, pz: 0, rx: 38, ry: 180, rz: 0, s: 0.9 },   // third person
+  // PC reference (YouTube frames): the remote stands nearly upright — body long axis ~30° from vertical with the top
+  // (antenna) leaning LEFT, the labelled face turned to the player. The old rz:0 let the hand roll it ~70° sideways;
+  // rz:-95 rolls it back to the PC hold (use the Remote tuner to fine-tune per device).
+  fp: { px: 0, py: 0, pz: 0, rx: 140, ry: 180, rz: -95, s: 1.0 },  // first person
+  tp: { px: 0, py: 0, pz: 0, rx: 38, ry: 180, rz: -55, s: 0.9 },   // third person
 };
 const remoteGet = (p, view, k) => { const v = tryDo("prop", () => p.getProperty(`${RP}${view}_${k}`)); return typeof v === "number" ? v : REMOTE_DEFAULTS[view][k]; };
 const remoteSet = (p, view, k, v) => tryDo("setProp", () => p.setProperty(`${RP}${view}_${k}`, v));
-const REMOTE_CAL = 6;   // bump this when the defaults change: every player is reset once to the new defaults
+const REMOTE_CAL = 7;   // bump this when the defaults change: every player is reset once to the new defaults
 function applyRemoteDefaults(player, force = false) {
   tryDo("remote-cal", () => {
     if (!force && player.getDynamicProperty("shooting_star:remote_cal") === REMOTE_CAL) return;
