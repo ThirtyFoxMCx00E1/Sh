@@ -1,0 +1,14 @@
+[
+  {
+    "flipbook_texture": "textures/blocks/star_core",
+    "atlas_tile": "shooting_star_demo_star_core",
+    "ticks_per_frame": 2,
+    "blend_frames": true
+  },
+  {
+    "flipbook_texture": "textures/blocks/star_trace",
+    "atlas_tile": "shooting_star_demo_star_trace",
+    "ticks_per_frame": 3,
+    "blend_frames": true
+  }
+]

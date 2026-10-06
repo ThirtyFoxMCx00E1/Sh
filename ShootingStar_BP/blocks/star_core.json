@@ -1,0 +1,29 @@
+{
+  "format_version": "1.21.50",
+  "minecraft:block": {
+    "description": {
+      "identifier": "shooting_star_demo:star_core",
+      "menu_category": {
+        "category": "nature",
+        "group": "itemGroup.name.ore"
+      }
+    },
+    "components": {
+      "minecraft:light_emission": 15,
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 3.0
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 1200.0
+      },
+      "minecraft:map_color": "#ffea00",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "shooting_star_demo_star_core",
+          "render_method": "alpha_test",
+          "ambient_occlusion": false
+        }
+      }
+    }
+  }
+}

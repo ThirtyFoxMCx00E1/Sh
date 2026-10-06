@@ -1,0 +1,52 @@
+{
+  "format_version": "1.10.0",
+  "particle_effect": {
+    "description": {
+      "identifier": "shooting_star_demo:fx_sky_tile5",
+      "basic_render_parameters": {
+        "material": "particles_alpha",
+        "texture": "textures/particle/sky_atlas5"
+      }
+    },
+    "components": {
+      "minecraft:emitter_rate_instant": {
+        "num_particles": 1
+      },
+      "minecraft:emitter_lifetime_once": {
+        "active_time": 1
+      },
+      "minecraft:emitter_shape_point": {},
+      "minecraft:particle_lifetime_expression": {
+        "max_lifetime": "(variable.life > 0 ? variable.life : 1.0)"
+      },
+      "minecraft:particle_initial_speed": 0,
+      "minecraft:particle_appearance_billboard": {
+        "size": [
+          "variable.size",
+          "variable.size"
+        ],
+        "facing_camera_mode": "lookat_xyz",
+        "uv": {
+          "texture_width": 1024,
+          "texture_height": 1024,
+          "uv": [
+            "variable.u",
+            "variable.v"
+          ],
+          "uv_size": [
+            "variable.uw",
+            "variable.uh"
+          ]
+        }
+      },
+      "minecraft:particle_appearance_tinting": {
+        "color": [
+          "variable.r",
+          "variable.g",
+          "variable.b",
+          "(variable.a > 0 ? variable.a : 1.0)"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "resource_pack_name": "shooting_star_demo",
+  "texture_name": "atlas.terrain",
+  "texture_data": {
+    "shooting_star_demo_star_core": {
+      "textures": "textures/blocks/star_core"
+    },
+    "shooting_star_demo_star_trace": {
+      "textures": "textures/blocks/star_trace"
+    }
+  }
+}

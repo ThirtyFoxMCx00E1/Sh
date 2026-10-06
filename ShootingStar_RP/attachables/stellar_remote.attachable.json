@@ -1,0 +1,37 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "shooting_star_demo:stellar_remote",
+      "materials": {
+        "default": "entity_alphatest",
+        "enchanted": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/stellar_remote"
+      },
+      "geometry": {
+        "default": "geometry.stellar_remote_3d"
+      },
+      "render_controllers": [
+        "controller.render.stellar_remote"
+      ],
+      "animations": {
+        "first_person_hold": "animation.stellar_remote.first_person_hold",
+        "third_person_hold": "animation.stellar_remote.third_person_hold",
+        "antenna_sway": "animation.stellar_remote.antenna_sway"
+      },
+      "scripts": {
+        "animate": [
+          {
+            "first_person_hold": "c.is_first_person"
+          },
+          {
+            "third_person_hold": "!c.is_first_person"
+          },
+          "antenna_sway"
+        ]
+      }
+    }
+  }
+}

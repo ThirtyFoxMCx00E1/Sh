@@ -1,0 +1,30 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "shooting_star_demo:falling_star",
+      "materials": {
+        "default": "entity_emissive_alpha"
+      },
+      "textures": {
+        "default": "textures/entity/falling_star"
+      },
+      "geometry": {
+        "default": "geometry.falling_star"
+      },
+      "animations": {
+        "spin": "animation.falling_star.spin",
+        "pulse": "animation.falling_star.pulse"
+      },
+      "scripts": {
+        "animate": [
+          "spin",
+          "pulse"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ]
+    }
+  }
+}

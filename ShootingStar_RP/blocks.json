@@ -1,0 +1,11 @@
+{
+  "format_version": "1.21.40",
+  "shooting_star_demo:star_core": {
+    "sound": "glass",
+    "textures": "shooting_star_demo_star_core"
+  },
+  "shooting_star_demo:star_trace": {
+    "sound": "stone",
+    "textures": "shooting_star_demo_star_trace"
+  }
+}

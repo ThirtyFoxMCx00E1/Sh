@@ -1,0 +1,11 @@
+space_atlas.png is baked from the mod's own space textures:
+- Earth: NASA Blue Marble / Black Marble (see ../moonfall/CREDITS.txt)
+- Moon: NASA SVS CGI Moon Kit (LRO)
+- Planets, Sun, Saturn ring: Solar System Scope (INOVE), CC BY 4.0, based on NASA data
+- Milky Way: NASA/JPL-Caltech/ESO/R. Hurt (eso1339g), CC BY 4.0; panorama: ESO
+Generic glow sprites (soft_glow, lens_star, ring, streak) are procedurally generated.
+
+--- v1.26.59 ---
+sky_atlas.png, sky_atlas2..7.png : star-field skyboxes supplied by the pack author (opaque, so the vanilla sky/moon never shows through)
+ringsys_atlas.png : 56 generated frames (50-frame seamless loop + 6 reveal frames) of the star-array ring system, same projection as the original single frame
+cloud_atlas.png   : 8 generated soft cloud sprites (flat cloud decks used while leaving the atmosphere)

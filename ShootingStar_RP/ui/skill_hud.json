@@ -1,0 +1,89 @@
+{
+  "namespace": "shooting_star_hud",
+  "skill_hud_panel": {
+    "type": "panel",
+    "size": [
+      150,
+      42
+    ],
+    "offset": [
+      -15,
+      -45
+    ],
+    "anchor_from": "bottom_right",
+    "anchor_to": "bottom_right",
+    "controls": [
+      {
+        "bg": {
+          "type": "image",
+          "texture": "textures/ui/dialog_background_opaque",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "alpha": 0.7,
+          "layer": 1
+        }
+      },
+      {
+        "skill_icon": {
+          "type": "image",
+          "texture": "textures/gui/sprites/skill/stellar_remote/the_shooting_star",
+          "size": [
+            28,
+            28
+          ],
+          "offset": [
+            6,
+            7
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "layer": 2
+        }
+      },
+      {
+        "skill_title": {
+          "type": "label",
+          "text": "\u00a7b\u2726 STELLAR REMOTE",
+          "font_size": "small",
+          "offset": [
+            38,
+            4
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "layer": 2
+        }
+      },
+      {
+        "skill_label": {
+          "type": "label",
+          "text": "\u00a7eSS-01 Railgun",
+          "font_size": "normal",
+          "offset": [
+            38,
+            14
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "layer": 2
+        }
+      },
+      {
+        "skill_sub": {
+          "type": "label",
+          "text": "\u00a77Sneak+Use: Menu",
+          "font_size": "small",
+          "offset": [
+            38,
+            26
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "layer": 2
+        }
+      }
+    ]
+  }
+}

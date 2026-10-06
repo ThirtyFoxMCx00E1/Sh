@@ -1,0 +1,18 @@
+{
+  "resource_pack_name": "shooting_star_demo",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "stellar_remote": {
+      "textures": "textures/items/stellar_remote_icon"
+    },
+    "stellar_remote_icon": {
+      "textures": "textures/items/stellar_remote_icon"
+    },
+    "the_shooting_star": {
+      "textures": "textures/gui/sprites/skill/stellar_remote/the_shooting_star"
+    },
+    "seven_stars": {
+      "textures": "textures/gui/sprites/skill/stellar_remote/seven_stars"
+    }
+  }
+}
