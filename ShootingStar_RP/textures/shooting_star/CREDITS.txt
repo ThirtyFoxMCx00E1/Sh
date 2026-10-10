@@ -1,9 +1,0 @@
-The Shooting Star textures — real imagery, resampled for the shaders
-
-planets.jpg (Mercury, Venus, the Sun, Mars, Jupiter, Saturn, Uranus, Neptune), saturn_ring.jpg
-    Solar System Scope (INOVE), planetary texture maps based on NASA elevation and imagery data,
-    licensed CC BY 4.0. https://www.solarsystemscope.com/textures/
-milky_way_top.jpg
-    NASA/JPL-Caltech/ESO/R. Hurt — Artist's impression of the Milky Way (eso1339g), licensed CC BY 4.0.
-    https://www.eso.org/public/images/eso1339g/
-Also used from ../moonfall: Blue Marble / Black Marble Earth, LRO Moon, ESO Milky Way panorama (see its CREDITS.txt).
